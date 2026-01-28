@@ -133,7 +133,7 @@ class ArmNavigationEnv(gym.Env):
         # Check collision
         if not self._is_free_state(new_state):
             reward = -100.0
-            terminated = False
+            terminated = True
         else:
             # Check if goal reached
             if new_state == self.goal:
