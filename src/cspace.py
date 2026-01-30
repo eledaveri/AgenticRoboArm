@@ -1,6 +1,6 @@
 import numpy as np
-from arm import PlanarArm2DOF
-from obstacles import check_collision
+from .arm import PlanarArm2DOF            # Import relativo
+from .obstacle import check_collision     # Import relativo
 
 class ConfigurationSpace:
     """C-space for a 2-DOF planar arm"""
@@ -14,14 +14,13 @@ class ConfigurationSpace:
 
     def build(self):
         """ Builds the C-space grid """
+        print("Building C-Space grid... (this might take a moment)")
         for i, th1 in enumerate(self.theta1_vals):
             for j, th2 in enumerate(self.theta2_vals):
                 segments = self.arm.get_segments(th1, th2)
 
-                # Se collide con ostacoli esterni
                 if check_collision(segments, self.obstacles):
                     self.grid[i, j] = 1   # obstacle
                 else:
                     self.grid[i, j] = 0   # free
         return self.grid
-

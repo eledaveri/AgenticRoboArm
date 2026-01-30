@@ -1,5 +1,5 @@
 # Init file for the agents package
-from .qlearning import QLearning2DOF
+from .qlearning import QLearning
 from .dql import DQL
 from .ppo import PPO
-from .sac import SAC
+from .sac import SACNetwork

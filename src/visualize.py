@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
+from matplotlib.patches import Polygon as MplPolygon
+from shapely.geometry import Polygon as ShapelyPolygon
 import matplotlib.colors as mcolors
 from scipy.ndimage import label
 import numpy as np
@@ -30,110 +31,76 @@ def plot_cspace(cspace, filename="cspace.png"):
 
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
-    plt.show()
+    plt.close()
 
 def plot_cspace_components(cspace, start=None, goal=None, filename="cspace_components.png"):
-    """
-    Plot C-space with connected components of free space.
-
-    Args:
-        cspace: ConfigurationSpace object
-        start: (i,j) tuple for start state (optional)
-        goal: (i,j) tuple for goal state (optional)
-        filename: output image file name
-    """
-
-    # Copy the grid
+    """Plot C-space with connected components of free space highlighted."""
     grid = cspace.grid.copy()
-
-    # Find connected components in free space
     free_space = (grid == 0)
     labeled, num_components = label(free_space)
-
-    print(f"Found {num_components} connected components in free space")
-
-    # Component map, -1 for obstacles
-    comp_map = labeled.copy()
-    comp_map[grid == 1] = -1
-
-    # Number of bins: obstacles (-1) + components (0..num_components-1)
-    num_bins = 1 + num_components
-
-    # Colormap: red for obstacles + colors for components
-    cmap = plt.cm.get_cmap("tab20", num_components)
-    colors = cmap(np.arange(num_components))
-    comp_cmap = mcolors.ListedColormap(["red"] + list(colors))
-
-    # Boundaries for BoundaryNorm: center each color on an integer
-    bounds = np.arange(-0.5, num_bins + 0.5, 1)
-    norm = mcolors.BoundaryNorm(bounds, comp_cmap.N)
+    
+    # Check connectivity
+    if start and goal:
+        start_comp = labeled[start[0], start[1]]
+        goal_comp = labeled[goal[0], goal[1]]
+        print(f"\n[C-Space] Start Comp: {start_comp}, Goal Comp: {goal_comp}")
+        if start_comp != goal_comp or start_comp == 0:
+            print(" -> WARNING: Start and Goal are NOT connected!")
 
     # Plot
-    plt.figure(figsize=(6, 5))
-    plt.imshow(
-        comp_map.T,  # obstacles = -1, components = 0..num_components-1
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Background (Obstacles)
+    ax.imshow(grid.T, origin="lower", cmap=mcolors.ListedColormap(['white', 'black']), 
+              extent=[cspace.theta1_vals[0], cspace.theta1_vals[-1],
+                      cspace.theta2_vals[0], cspace.theta2_vals[-1]], aspect='auto', alpha=0.3)
+
+    # Components
+    masked_data = np.ma.masked_where(grid.T == 1, labeled.T)
+    im = ax.imshow(
+        masked_data,
         origin="lower",
         extent=[cspace.theta1_vals[0], cspace.theta1_vals[-1],
                 cspace.theta2_vals[0], cspace.theta2_vals[-1]],
-        cmap=comp_cmap,
-        norm=norm,
-        aspect="auto"
+        cmap="tab20",
+        aspect="auto",
+        alpha=0.8
     )
     
-    # Plot start and goal if provided
-    if start is not None:
-        theta1_start = cspace.theta1_vals[start[0]]
-        theta2_start = cspace.theta2_vals[start[1]]
-        plt.scatter(theta1_start, theta2_start, color='lime', s=150, 
-                   marker='*', edgecolors='black', linewidths=1.5, 
-                   label='Start', zorder=5)
+    if start:
+        theta1_s = cspace.theta1_vals[start[0]]
+        theta2_s = cspace.theta2_vals[start[1]]
+        ax.scatter(theta1_s, theta2_s, c='lime', s=200, marker='*', edgecolors='k', label='Start', zorder=10)
     
-    if goal is not None:
-        theta1_goal = cspace.theta1_vals[goal[0]]
-        theta2_goal = cspace.theta2_vals[goal[1]]
-        plt.scatter(theta1_goal, theta2_goal, color='yellow', s=150, 
-                   marker='*', edgecolors='black', linewidths=1.5, 
-                   label='Goal', zorder=5)
-    
-    if start is not None or goal is not None:
-        plt.legend(loc='upper right')
-    
-    plt.xlabel(r"$\theta_1$ (rad)")
-    plt.ylabel(r"$\theta_2$ (rad)")
-    plt.title("Configuration Space - Connected Components")
+    if goal:
+        theta1_g = cspace.theta1_vals[goal[0]]
+        theta2_g = cspace.theta2_vals[goal[1]]
+        ax.scatter(theta1_g, theta2_g, c='red', s=200, marker='*', edgecolors='k', label='Goal', zorder=10)
 
+    ax.set_xlabel(r"$\theta_1$")
+    ax.set_ylabel(r"$\theta_2$")
+    ax.set_title(f"C-Space Connectivity ({num_components} components)")
+    plt.colorbar(im, ax=ax, label="Component ID")
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
-    plt.show()
+    plt.close()
 
 def plot_workspace(arm, theta1, theta2, obstacles, start=None, goal=None, cspace=None, filename="workspace.png"):
-    """
-    Plot the workspace with the arm in a given configuration and obstacles.
-    Optionally, show start and goal positions from the C-space.
-    
-    Args:
-        arm: PlanarArm2DOF object
-        theta1, theta2: current joint angles
-        obstacles: list of obstacle objects
-        start: (i,j) tuple in C-space for start (optional)
-        goal: (i,j) tuple in C-space for goal (optional)
-        cspace: ConfigurationSpace object (required if start/goal are provided)
-        filename: output image file name
-    """
-    fig, ax = plt.subplots()
+    """Plot workspace with arm configuration and obstacles."""
+    fig, ax = plt.subplots(figsize=(6,6))
 
     # Arm segments
     segments = arm.get_segments(theta1, theta2)
     for (p0, p1) in segments:
         ax.plot([p0[0], p1[0]], [p0[1], p1[1]], "bo-", linewidth=3)
 
-    # Obstacles
+    # Obstacles (Fixed for Shapely)
     for obs in obstacles:
-        if hasattr(obs, "bounds"):  # shapely polygon
-            patch = Polygon(list(obs.exterior.coords), facecolor="red", alpha=0.4)
-            ax.add_patch(patch)
+        if isinstance(obs, ShapelyPolygon):
+            x, y = obs.exterior.xy
+            ax.fill(x, y, color="red", alpha=0.4)
 
-    # Plot start and goal positions if provided
+    # Start/Goal
     if start is not None and cspace is not None:
         start_pos = arm.forward_kinematics(cspace.theta1_vals[start[0]], cspace.theta2_vals[start[1]])
         ax.scatter(*start_pos, color='green', s=100, label='Start')
@@ -142,30 +109,18 @@ def plot_workspace(arm, theta1, theta2, obstacles, start=None, goal=None, cspace
         goal_pos = arm.forward_kinematics(cspace.theta1_vals[goal[0]], cspace.theta2_vals[goal[1]])
         ax.scatter(*goal_pos, color='blue', s=100, label='Goal')
 
-    if (start is not None and cspace is not None) or (goal is not None and cspace is not None):
-        ax.legend()
-
     ax.set_aspect("equal")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    ax.set_title("Workspace: robot + obstacles")
-
+    ax.set_title("Workspace")
+    ax.legend()
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
-    plt.show()
-
+    plt.close()
 
 def plot_cspace_path(cspace, path, filename="cspace_path.png"):
-    """
-    Plot the discretized C-space with a path overlaid.
-
-    Args:
-        cspace: ConfigurationSpace object
-        path: list of (i,j) states representing the path
-        filename: output image file name
-    """
-    # Base C-space
-    cmap = mcolors.ListedColormap(["white", "blue"])  # 0=free, 1=obstacle
+    """Plot the discretized C-space with a path overlaid."""
+    cmap = mcolors.ListedColormap(["white", "blue"])
     bounds = [0, 1, 2]
     norm = mcolors.BoundaryNorm(bounds, cmap.N)
 
@@ -180,150 +135,120 @@ def plot_cspace_path(cspace, path, filename="cspace_path.png"):
         aspect="auto"
     )
 
-    # Convert path indices (i,j) to theta1/theta2 values
-    theta1_path = [cspace.theta1_vals[i] for i, j in path]
-    theta2_path = [cspace.theta2_vals[j] for i, j in path]
+    if len(path) > 0:
+        theta1_path = [cspace.theta1_vals[i] for i, j in path]
+        theta2_path = [cspace.theta2_vals[j] for i, j in path]
+        plt.plot(theta1_path, theta2_path, color="red", marker="o", markersize=2, linewidth=1, label="Path")
 
-    # Overlay path
-    plt.plot(theta1_path, theta2_path, color="red", marker="o", markersize=3, linewidth=2, label="Path")
-
-    plt.xlabel(r"$\theta_1$ (rad)")
-    plt.ylabel(r"$\theta_2$ (rad)")
-    plt.title("Configuration Space with Q-learning Path")
+    plt.xlabel(r"$\theta_1$")
+    plt.ylabel(r"$\theta_2$")
+    plt.title("C-Space Path")
     plt.legend()
-
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
-    plt.show()
+    plt.close()
 
-
-def plot_workspace_path(arm, path, cspace, start=None, goal=None, filename="workspace_path.png"):
-    """
-    Plot the robot trajectory in the workspace (x,y) with highlighted start and goal.
-    
-    Args:
-        arm: PlanarArm2DOF object,
-        path: list of (i,j) states representing the path,
-        cspace: ConfigurationSpace object,
-        start: (i,j) tuple for start state (optional),
-        goal: (i,j) tuple for goal state (optional),
-        filename: output image file name
-    """
-    start = start if start else (0, 0)
-    goal = goal if goal else (cspace.N1-1, cspace.N2-1)
+def plot_workspace_path(arm, path, env_or_cspace, start=None, goal=None, filename="workspace_path.png"):
+    """Plot path in workspace with obstacles correctly drawn."""
+    theta1_vals = env_or_cspace.theta1_vals
+    theta2_vals = env_or_cspace.theta2_vals
+    obstacles = env_or_cspace.obstacles
 
     plt.figure(figsize=(6,6))
     ax = plt.gca()
 
-    # Draw the obstacles (Shapely Polygons)
-    for obs in cspace.obstacles:
-        if isinstance(obs, Polygon):
+    # Draw Obstacles (CORRECTED)
+    for obs in obstacles:
+        if isinstance(obs, ShapelyPolygon):
             x, y = obs.exterior.xy
-            ax.fill(x, y, color='k', alpha=0.3)
+            ax.fill(x, y, color='red', alpha=0.5)
 
-    # Converts the path from (i,j) to θ1, θ2
-    theta1_path = [cspace.theta1_vals[i] for i,j in path]
-    theta2_path = [cspace.theta2_vals[j] for i,j in path]
-
-    # Compute the coordinates of the end-effector
-    x_path = []
-    y_path = []
-    for th1, th2 in zip(theta1_path, theta2_path):
+    # Draw Path
+    x_path, y_path = [], []
+    for i, j in path:
+        th1 = theta1_vals[i]
+        th2 = theta2_vals[j]
         pos = arm.forward_kinematics(th1, th2)
         x_path.append(pos[0])
         y_path.append(pos[1])
 
-    # Trajectory
-    plt.plot(x_path, y_path, 'r-o', markersize=3, linewidth=2, label="Path")
+    plt.plot(x_path, y_path, 'b-o', markersize=2, linewidth=1, label="Path", alpha=0.7)
 
-    # Highlight start and goal
-    start_pos = arm.forward_kinematics(cspace.theta1_vals[start[0]], cspace.theta2_vals[start[1]])
-    goal_pos = arm.forward_kinematics(cspace.theta1_vals[goal[0]], cspace.theta2_vals[goal[1]])
-    plt.scatter(*start_pos, color='green', s=100, label='Start')
-    plt.scatter(*goal_pos, color='blue', s=100, label='Goal')
+    if start:
+        s_pos = arm.forward_kinematics(theta1_vals[start[0]], theta2_vals[start[1]])
+        plt.scatter(*s_pos, color='lime', s=150, marker='*', edgecolors='k', label='Start', zorder=5)
+    
+    if goal:
+        g_pos = arm.forward_kinematics(theta1_vals[goal[0]], theta2_vals[goal[1]])
+        plt.scatter(*g_pos, color='red', s=150, marker='*', edgecolors='k', label='Goal', zorder=5)
 
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.title("Workspace Path")
-    plt.legend()
     plt.axis("equal")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
-    plt.show()
+    plt.close()
 
-def animate_training_path(arm, path, cspace, obstacles, start, goal, filename="training_animation.gif"):
-    """Create an animation of the robot arm moving along the learned path.
+def animate_training_path(arm, path, env_or_cspace, obstacles, start, goal, filename="training_animation.gif"):
+    """Create GIF animation of the arm moving."""
+    theta1_vals = env_or_cspace.theta1_vals
+    theta2_vals = env_or_cspace.theta2_vals
     
-    Args:
-        arm: PlanarArm2DOF object
-        path: list of (i,j) states representing the path
-        cspace: ConfigurationSpace object
-        obstacles: list of obstacle objects
-        start: (i,j) tuple for start state
-        goal: (i,j) tuple for goal state
-        filename: output filename for the animation
-    """
-    fig, ax = plt.subplots(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(6, 6))
     
-    # Obstacles
     for obs in obstacles:
-        if hasattr(obs, 'exterior'):
-            patch = Polygon(list(obs.exterior.coords), facecolor='red', alpha=0.3)
-            ax.add_patch(patch)
-    
-    # Start and goal positions using forward kinematics
-    i_s, j_s = start
-    i_g, j_g = goal
-    start_pos = arm.forward_kinematics(cspace.theta1_vals[i_s], cspace.theta2_vals[j_s])
-    goal_pos = arm.forward_kinematics(cspace.theta1_vals[i_g], cspace.theta2_vals[j_g])
-    ax.scatter(*start_pos, color='green', s=200, marker='*', label='Start')
-    ax.scatter(*goal_pos, color='gold', s=200, marker='*', label='Goal')
-    
-    # Setup plot
-    ax.set_xlim(-2.5, 2.5)
-    ax.set_ylim(-2.5, 2.5)
+        if isinstance(obs, ShapelyPolygon):
+            x, y = obs.exterior.xy
+            ax.fill(x, y, color='red', alpha=0.5)
+
+    ax.set_xlim(-2.2, 2.2)
+    ax.set_ylim(-2.2, 2.2)
     ax.set_aspect('equal')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_title('Robot Arm Motion')
-    ax.legend()
     ax.grid(True, alpha=0.3)
+    ax.set_title("Robot Arm Animation")
+
+    line_arm, = ax.plot([], [], 'ko-', linewidth=3, markersize=5)
+    line_trail, = ax.plot([], [], 'b-', linewidth=1, alpha=0.5)
     
-    # Animated elements
-    line1, = ax.plot([], [], 'bo-', linewidth=3, markersize=8)
-    line2, = ax.plot([], [], 'b-', alpha=0.5, linewidth=1)
     trail_x, trail_y = [], []
-    
+
     def init():
-        line1.set_data([], [])
-        line2.set_data([], [])
-        return line1, line2
-    
+        line_arm.set_data([], [])
+        line_trail.set_data([], [])
+        return line_arm, line_trail
+
     def update(frame):
-        i, j = path[frame]
-        th1 = cspace.theta1_vals[i]
-        th2 = cspace.theta2_vals[j]
+        idx = frame
+        if idx >= len(path): idx = len(path) - 1
         
-        # Arm
+        i, j = path[idx]
+        th1 = theta1_vals[i]
+        th2 = theta2_vals[j]
+
         segments = arm.get_segments(th1, th2)
-        x_arm = [0] + [seg[1][0] for seg in segments]
-        y_arm = [0] + [seg[1][1] for seg in segments]
-        line1.set_data(x_arm, y_arm)
+        xs = [segments[0][0][0], segments[0][1][0], segments[1][1][0]]
+        ys = [segments[0][0][1], segments[0][1][1], segments[1][1][1]]
         
-        # Trace
-        pos = arm.forward_kinematics(th1, th2)
-        trail_x.append(pos[0])
-        trail_y.append(pos[1])
-        line2.set_data(trail_x, trail_y)
+        line_arm.set_data(xs, ys)
+
+        trail_x.append(xs[-1])
+        trail_y.append(ys[-1])
+        line_trail.set_data(trail_x, trail_y)
+
+        return line_arm, line_trail
+
+    frames = len(path)
+    step = 1
+    if frames > 200:
+        step = frames // 200
+        frames = 200
         
-        ax.set_title(f'Robot Arm Motion - Step {frame}/{len(path)-1}')
-        return line1, line2
+    anim = FuncAnimation(fig, update, frames=range(0, len(path), step), 
+                        init_func=init, blit=True, interval=50)
     
-    anim = FuncAnimation(fig, update, frames=len(path), init_func=init,
-                        blit=True, interval=100, repeat=True)
-    
-    # Save as GIF
-    writer = PillowWriter(fps=20)
-    anim.save(filename, writer=writer)
-    print(f"Animation saved in {filename}")
+    anim.save(filename, writer=PillowWriter(fps=20))
+    print(f"Animation saved to {filename}")
     plt.close()

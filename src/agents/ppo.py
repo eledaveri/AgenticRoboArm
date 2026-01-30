@@ -34,7 +34,7 @@ class ActorCritic(nn.Module):
 class PPO:
     """Proximal Policy Optimization agent"""
     
-    def __init__(self, env, learning_rate=0.001, gamma=0.95, gae_lambda=0.95,
+    def __init__(self, env, learning_rate=0.0003, gamma=0.95, gae_lambda=0.95,
                  clip_ratio=0.2, epochs=5, device=None):
         """
         Args:
