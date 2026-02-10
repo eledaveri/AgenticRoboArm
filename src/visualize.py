@@ -192,26 +192,39 @@ def plot_workspace_path(arm, path, env_or_cspace, start=None, goal=None, filenam
     plt.savefig(filename, dpi=300)
     plt.close()
 
+# Sostituisci la funzione animate_training_path in src/visualize.py con questa:
+
 def animate_training_path(arm, path, env_or_cspace, obstacles, start, goal, filename="training_animation.gif"):
-    """Create GIF animation of the arm moving."""
+    """Create GIF animation of the arm moving, with Start and Goal highlighted."""
     theta1_vals = env_or_cspace.theta1_vals
     theta2_vals = env_or_cspace.theta2_vals
     
     fig, ax = plt.subplots(figsize=(6, 6))
     
+    # 1. Disegna Ostacoli
     for obs in obstacles:
         if isinstance(obs, ShapelyPolygon):
             x, y = obs.exterior.xy
             ax.fill(x, y, color='red', alpha=0.5)
+
+    # 2. Disegna Start e Goal (Statici)
+    if start:
+        s_pos = arm.forward_kinematics(theta1_vals[start[0]], theta2_vals[start[1]])
+        ax.scatter(*s_pos, color='lime', s=200, marker='*', edgecolors='k', label='Start', zorder=5)
+    
+    if goal:
+        g_pos = arm.forward_kinematics(theta1_vals[goal[0]], theta2_vals[goal[1]])
+        ax.scatter(*g_pos, color='blue', s=200, marker='*', edgecolors='k', label='Goal', zorder=5)
 
     ax.set_xlim(-2.2, 2.2)
     ax.set_ylim(-2.2, 2.2)
     ax.set_aspect('equal')
     ax.grid(True, alpha=0.3)
     ax.set_title("Robot Arm Animation")
+    ax.legend(loc='upper right')
 
-    line_arm, = ax.plot([], [], 'ko-', linewidth=3, markersize=5)
-    line_trail, = ax.plot([], [], 'b-', linewidth=1, alpha=0.5)
+    line_arm, = ax.plot([], [], 'ko-', linewidth=3, markersize=5, zorder=10)
+    line_trail, = ax.plot([], [], 'b-', linewidth=1, alpha=0.5, zorder=1)
     
     trail_x, trail_y = [], []
 

@@ -137,7 +137,7 @@ def main():
     
     # Configurazione
     N_DISCRETIZATION = 100 
-    NUM_EPISODES = 20000    
+    NUM_EPISODES = 50000    
     
     # Setup Cartelle
     import os

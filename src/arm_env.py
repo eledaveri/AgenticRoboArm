@@ -142,7 +142,7 @@ class ArmNavigationEnv(gym.Env):
             else:
                 # Distance-based reward (Manhattan distance in discrete space)
                 dist_to_goal = abs(i_new - self.goal[0]) + abs(j_new - self.goal[1])
-                reward = -1.0 - 0.01 * dist_to_goal
+                reward = -0.1 - 0.01 * dist_to_goal     #-1.0 - 0.01 * dist_to_goal
                 terminated = False
         
         self.current_state = new_state

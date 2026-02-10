@@ -62,7 +62,9 @@ class PPO:
     
     def choose_action(self, state, training=True):
         """Sample action from policy"""
-        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        # NORMALIZZAZIONE INPUT
+        state_norm = np.array(state, dtype=np.float32) / self.env.n_discretization
+        state_tensor = torch.FloatTensor(state_norm).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
             action_probs, _ = self.policy(state_tensor)
@@ -73,12 +75,20 @@ class PPO:
         
         return action.item(), log_prob.item()
     
+    # In src/agents/ppo.py, modifica il metodo compute_gae
+
     def compute_gae(self, trajectory):
         """Compute Generalized Advantage Estimation"""
         states, actions, rewards, next_states, dones, log_probs = trajectory
         
-        states_t = torch.FloatTensor(np.array(states)).to(self.device)
-        next_states_t = torch.FloatTensor(np.array(next_states)).to(self.device)
+        # Se hai applicato la normalizzazione:
+        states_t = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
+        next_states_t = torch.FloatTensor(np.array(next_states, dtype=np.float32) / self.env.n_discretization).to(self.device)
+        
+        # Se NON hai la normalizzazione (codice originale):
+        # states_t = torch.FloatTensor(np.array(states)).to(self.device)
+        # next_states_t = torch.FloatTensor(np.array(next_states)).to(self.device)
+
         rewards_t = torch.FloatTensor(rewards).to(self.device)
         dones_t = torch.FloatTensor(dones).to(self.device)
         log_probs_t = torch.FloatTensor(log_probs).to(self.device)
@@ -87,8 +97,9 @@ class PPO:
             _, values = self.policy(states_t)
             _, next_values = self.policy(next_states_t)
         
-        values = values.squeeze()
-        next_values = next_values.squeeze()
+        # FIX QUI: Usare view(-1) invece di squeeze() per evitare scalari 0-dim
+        values = values.view(-1)
+        next_values = next_values.view(-1)
         
         advantages = torch.zeros_like(rewards_t)
         gae = 0
@@ -113,7 +124,8 @@ class PPO:
         states = trajectory[0]
         actions = trajectory[1]
         
-        states_t = torch.FloatTensor(np.array(states)).to(self.device)
+        # NORMALIZZAZIONE BATCH
+        states_t = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         actions_t = torch.LongTensor(actions).to(self.device)
         old_log_probs = old_log_probs.detach()
         
@@ -210,7 +222,11 @@ class PPO:
             state = next_state
             
             if terminated:
-                print(f"Goal reached in {len(path)} steps!")
+                # FIX: Controllo se è veramente un successo
+                if reward > 0:
+                    print(f"Goal reached in {len(path)} steps!")
+                else:
+                    print(f"Failed (Collision) in {len(path)} steps.")
                 break
         
         return path

@@ -69,7 +69,9 @@ class DQL:
         if training and random.random() < self.epsilon:
             return self.env.action_space.sample()
         else:
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            # NORMALIZZAZIONE INPUT
+            state_norm = np.array(state, dtype=np.float32) / self.env.n_discretization
+            state_tensor = torch.FloatTensor(state_norm).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 q_values = self.q_network(state_tensor)
             return q_values.argmax(1).item()
@@ -82,10 +84,12 @@ class DQL:
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         
-        states = torch.FloatTensor(np.array(states)).to(self.device)
+        # NORMALIZZAZIONE BATCH
+        states = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
-        next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
+        # NORMALIZZAZIONE NEXT STATES
+        next_states = torch.FloatTensor(np.array(next_states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         dones = torch.FloatTensor(dones).to(self.device)
         
         # Current Q-values
@@ -169,7 +173,11 @@ class DQL:
             state = next_state
             
             if terminated:
-                print(f"Goal reached in {len(path)} steps!")
+                # FIX: Controllo se è veramente un successo
+                if reward > 0:
+                    print(f"Goal reached in {len(path)} steps!")
+                else:
+                    print(f"Failed (Collision) in {len(path)} steps.")
                 break
         
         return path

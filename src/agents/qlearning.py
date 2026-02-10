@@ -69,6 +69,8 @@ class QLearning:
                 avg_rew = np.mean(self.episode_rewards[-100:])
                 print(f"Episode {episode+1}: Avg Reward {avg_rew:.2f}")
 
+    # Sostituisci il metodo get_path in src/agents/qlearning.py con questo:
+
     def get_path(self, max_steps=500):
         path = []
         state, _ = self.env.reset()
@@ -77,13 +79,21 @@ class QLearning:
         
         for _ in range(max_steps):
             action = self.choose_action(state, training=False)
-            next_state, _, terminated, truncated, _ = self.env.step(action)
-            next_state = tuple(next_state)
+            next_state, reward, terminated, truncated, _ = self.env.step(action)
+            next_state_t = tuple(next_state)
             
-            path.append(next_state)
-            state = next_state
+            path.append(next_state_t)
+            state = next_state_t
             
-            if terminated or truncated:
+            if terminated:
+                if reward > 0:
+                    print(f"Goal reached in {len(path)} steps!")
+                else:
+                    print(f"Failed (Collision) in {len(path)} steps.")
+                break
+            
+            if truncated:
+                print(f"Failed (Truncated) after {len(path)} steps.")
                 break
             
         return path

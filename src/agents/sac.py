@@ -47,7 +47,7 @@ class SACNetwork(nn.Module):
 
 class SAC:
     """Discrete Soft Actor-Critic agent"""
-    def __init__(self, env, actor_lr=0.001, q_lr=0.001, alpha_lr=0.001,
+    def __init__(self, env, actor_lr=0.0003, q_lr=0.0003, alpha_lr=0.001,
                  gamma=0.95, tau=0.005, alpha=0.2, memory_size=10000,
                  batch_size=64, device=None):
         self.env = env
@@ -79,10 +79,14 @@ class SAC:
         return self.log_alpha.exp()
 
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        scaled_reward = reward / 20.0
+        self.memory.append((state, action, scaled_reward, next_state, done))
 
     def choose_action(self, state, training=True):
-        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        # NORMALIZZAZIONE INPUT
+        state_norm = np.array(state, dtype=np.float32) / self.env.n_discretization
+        state_t = torch.FloatTensor(state_norm).unsqueeze(0).to(self.device)
+        
         with torch.no_grad():
             probs = self.model.actor(state_t)
         
@@ -99,16 +103,18 @@ class SAC:
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
 
-        states = torch.FloatTensor(np.array(states)).to(self.device)
+        # NORMALIZZAZIONE BATCH
+        states = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
         rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
-        next_states = torch.FloatTensor(np.array(next_states)).to(self.device)
+        # NORMALIZZAZIONE NEXT STATES
+        next_states = torch.FloatTensor(np.array(next_states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
         # --- Critic Update ---
         with torch.no_grad():
             # Calcolo V(s') usando la policy target e Q target
-            next_probs = self.model.actor(next_states) # Usa actor corrente (o target, variante)
+            next_probs = self.model.actor(next_states) 
             # Evita log(0)
             z = (next_probs == 0.0).float() * 1e-8
             log_next_probs = torch.log(next_probs + z)
@@ -129,6 +135,10 @@ class SAC:
         
         self.q_opt.zero_grad()
         q_loss.backward()
+        
+        # >>> MODIFICA: Gradient Clipping per il Critic (Q-networks) <<<
+        torch.nn.utils.clip_grad_norm_(list(self.model.q1.parameters()) + list(self.model.q2.parameters()), 1.0)
+        
         self.q_opt.step()
 
         # --- Actor Update ---
@@ -147,6 +157,10 @@ class SAC:
         
         self.actor_opt.zero_grad()
         actor_loss.backward()
+        
+        # >>> MODIFICA: Gradient Clipping per l'Actor <<<
+        torch.nn.utils.clip_grad_norm_(self.model.actor.parameters(), 1.0)
+        
         self.actor_opt.step()
 
         # --- Alpha Update ---
@@ -184,15 +198,24 @@ class SAC:
             
             if verbose and (episode + 1) % 100 == 0:
                 avg = np.mean(self.episode_rewards[-50:])
-                print(f"Episode {episode+1}: SAC Reward {avg:.2f}")
+                success_rate = 100.0 * np.sum(self.episode_success[-100:]) / min(len(self.episode_success), 100)
+                print(f"Episode {episode+1}: SAC Reward {avg:.2f}, Success {success_rate:.1f}%")
 
     def get_path(self, max_steps=500):
         path = []
         state, _ = self.env.reset()
         path.append(tuple(state))
+        
         for _ in range(max_steps):
             action = self.choose_action(state, training=False)
-            state, _, term, trunc, _ = self.env.step(action)
+            state, reward, term, trunc, _ = self.env.step(action) # Cattura reward
             path.append(tuple(state))
-            if term or trunc: break
+            
+            if term or trunc:
+                # FIX: Controllo se è veramente un successo
+                if reward > 0:
+                    print(f"Goal reached in {len(path)} steps!")
+                else:
+                    print(f"Failed (Collision) in {len(path)} steps.")
+                break
         return path

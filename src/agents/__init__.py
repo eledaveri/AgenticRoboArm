@@ -2,4 +2,4 @@
 from .qlearning import QLearning
 from .dql import DQL
 from .ppo import PPO
-from .sac import SACNetwork
+from .sac import SACNetwork, SAC
