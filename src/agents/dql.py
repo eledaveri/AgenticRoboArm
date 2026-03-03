@@ -61,15 +61,28 @@ class DQL:
         self.episode_success = []
     
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in replay buffer"""
+        """Store experience in replay buffer
+        Args:
+            state: current state
+            action: action taken
+            reward: reward received
+            next_state: next state after action
+            done: whether episode ended
+        """
         self.memory.append((state, action, reward, next_state, done))
     
     def choose_action(self, state, training=True):
-        """Epsilon-greedy action selection"""
+        """Epsilon-greedy action selection
+        Args:
+            state: current state
+            training: whether in training mode (affects exploration)
+        Returns:
+            action: action index
+        """
         if training and random.random() < self.epsilon:
             return self.env.action_space.sample()
         else:
-            # NORMALIZZAZIONE INPUT
+            # Input normalization
             state_norm = np.array(state, dtype=np.float32) / self.env.n_discretization
             state_tensor = torch.FloatTensor(state_norm).unsqueeze(0).to(self.device)
             with torch.no_grad():
@@ -84,11 +97,11 @@ class DQL:
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         
-        # NORMALIZZAZIONE BATCH
+        # Batch normalization
         states = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
-        # NORMALIZZAZIONE NEXT STATES
+        # Next states normalization
         next_states = torch.FloatTensor(np.array(next_states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         dones = torch.FloatTensor(dones).to(self.device)
         
@@ -113,7 +126,13 @@ class DQL:
         self.target_network.load_state_dict(self.q_network.state_dict())
     
     def train(self, num_episodes=5000, max_steps=500, update_target_freq=500, verbose=True):
-        """Training loop"""
+        """Training loop
+        Args:
+            num_episodes: total number of episodes to train
+            max_steps: max steps per episode
+            update_target_freq: how often to update target network (in steps)
+            verbose: whether to print training progress
+    """
         epsilon_decay = (self.epsilon_min / self.epsilon_initial) ** (1.0 / num_episodes)
         steps_total = 0
         
@@ -154,7 +173,11 @@ class DQL:
         print(f"\nTraining completed. Final success rate: {success_rate:.1f}%")
     
     def get_path(self, max_steps=1000):
-        """Extract path using trained network"""
+        """Extract path using trained network
+        Args:
+            max_steps: maximum steps to take when extracting path
+        Returns: list of states in the path
+        """
         state, _ = self.env.reset()
         path = [state]
         visited = {tuple(state)}
@@ -173,7 +196,7 @@ class DQL:
             state = next_state
             
             if terminated:
-                # FIX: Controllo se è veramente un successo
+                # Check if it's a success or failure
                 if reward > 0:
                     print(f"Goal reached in {len(path)} steps!")
                 else:

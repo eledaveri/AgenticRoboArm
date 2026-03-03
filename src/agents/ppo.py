@@ -61,8 +61,15 @@ class PPO:
         self.episode_success = []
     
     def choose_action(self, state, training=True):
-        """Sample action from policy"""
-        # NORMALIZZAZIONE INPUT
+        """Sample action from policy
+        Args:
+            state: current state
+            training: if True, sample from distribution; if False, take argmax
+        Returns:
+            action: chosen action
+            log_prob: log probability of the chosen action
+        """
+        # Input normalization
         state_norm = np.array(state, dtype=np.float32) / self.env.n_discretization
         state_tensor = torch.FloatTensor(state_norm).unsqueeze(0).to(self.device)
         
@@ -74,18 +81,19 @@ class PPO:
         log_prob = dist.log_prob(action)
         
         return action.item(), log_prob.item()
-    
-    # In src/agents/ppo.py, modifica il metodo compute_gae
 
     def compute_gae(self, trajectory):
-        """Compute Generalized Advantage Estimation"""
+        """Compute Generalized Advantage Estimation
+        Args:
+            trajectory: list of (state, action, reward, next_state, done, log_prob) tuples for one episode
+            Returns: advantages, returns, old_log_probs tensors"""
         states, actions, rewards, next_states, dones, log_probs = trajectory
         
-        # Se hai applicato la normalizzazione:
+        # If normalized input:
         states_t = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         next_states_t = torch.FloatTensor(np.array(next_states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         
-        # Se NON hai la normalizzazione (codice originale):
+        # If not normalized:
         # states_t = torch.FloatTensor(np.array(states)).to(self.device)
         # next_states_t = torch.FloatTensor(np.array(next_states)).to(self.device)
 
@@ -97,7 +105,6 @@ class PPO:
             _, values = self.policy(states_t)
             _, next_values = self.policy(next_states_t)
         
-        # FIX QUI: Usare view(-1) invece di squeeze() per evitare scalari 0-dim
         values = values.view(-1)
         next_values = next_values.view(-1)
         
@@ -119,17 +126,19 @@ class PPO:
         return advantages.detach(), returns.detach(), log_probs_t
     
     def update(self, trajectory):
-        """Update policy using PPO"""
+        """Update policy using PPO
+        Args:
+            trajectory: list of (state, action, reward, next_state, done, log_prob) tuples for one episode"""
         advantages, returns, old_log_probs = self.compute_gae(trajectory)
         states = trajectory[0]
         actions = trajectory[1]
         
-        # NORMALIZZAZIONE BATCH
+        # Batch normalization
         states_t = torch.FloatTensor(np.array(states, dtype=np.float32) / self.env.n_discretization).to(self.device)
         actions_t = torch.LongTensor(actions).to(self.device)
         old_log_probs = old_log_probs.detach()
         
-        # Normalize advantages
+        # Advantages normalization
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         
         for _ in range(self.epochs):
@@ -154,7 +163,13 @@ class PPO:
             self.optimizer.step()
     
     def train(self, num_episodes=5000, max_steps=500, update_freq=10, verbose=True):
-        """Training loop"""
+        """Training loop
+        Args:
+            num_episodes: total number of episodes to train
+            max_steps: max steps per episode
+            update_freq: how often to update the policy (in episodes)
+            verbose: if True, print training progress
+        Returns: training results dictionary and the last trajectory"""
         trajectories = []
         trajectory_count = 0
         
@@ -203,7 +218,10 @@ class PPO:
         print(f"\nTraining completed. Final success rate: {success_rate:.1f}%")
     
     def get_path(self, max_steps=1000):
-        """Extract path using trained policy"""
+        """Extract path using trained policy
+        Args:
+            max_steps: maximum steps to extract path
+        Returns: list of states in the path """
         state, _ = self.env.reset()
         path = [state]
         visited = {tuple(state)}
@@ -222,7 +240,7 @@ class PPO:
             state = next_state
             
             if terminated:
-                # FIX: Controllo se è veramente un successo
+                # Check if it's a success or failure
                 if reward > 0:
                     print(f"Goal reached in {len(path)} steps!")
                 else:

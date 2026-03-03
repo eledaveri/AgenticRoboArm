@@ -33,6 +33,10 @@ class QLearning:
         return random.choice(actions_with_max_q)
 
     def train(self, num_episodes=None, verbose=False):
+        """Training loop
+        Args:
+            num_episodes: number of episodes to train (if None, uses self.num_episodes)
+            verbose: if True, print progress every 500 episodes """
         if num_episodes is None:
             num_episodes = self.num_episodes
             
@@ -69,9 +73,12 @@ class QLearning:
                 avg_rew = np.mean(self.episode_rewards[-100:])
                 print(f"Episode {episode+1}: Avg Reward {avg_rew:.2f}")
 
-    # Sostituisci il metodo get_path in src/agents/qlearning.py con questo:
 
     def get_path(self, max_steps=500):
+        """Extract path using learned Q-table
+        Args:
+            max_steps: maximum steps to extract path
+        Returns: list of states in the path """
         path = []
         state, _ = self.env.reset()
         state = tuple(state)

@@ -137,7 +137,7 @@ def main():
     
     # Configurazione
     N_DISCRETIZATION = 100 
-    NUM_EPISODES = 50000    
+    NUM_EPISODES = 50000  # Modificato come da tua richiesta precedente
     
     # Setup Cartelle
     import os
@@ -146,7 +146,7 @@ def main():
     # 1. Crea Mondo
     arm, obstacles = create_environment()
     
-    # 2. Costruisci C-Space per analizzare la connettività
+    # 2. Costruisci C-Space
     print("Building C-Space...")
     cspace = ConfigurationSpace(
         arm, (0, 2*np.pi), (0, 2*np.pi), 
@@ -154,18 +154,15 @@ def main():
     )
     cspace.build()
     
-    # 3. TROVA START/GOAL VALIDI AUTOMATICAMENTE
+    # 3. TROVA START/GOAL
     start_state, goal_state = find_valid_points(cspace)
-    
-    # Salva l'immagine del C-Space con Start e Goal evidenziati (e Legenda)
     plot_cspace_components(
         cspace, 
         start=start_state, 
         goal=goal_state, 
         filename="./results/cspace_connectivity.png"
     )
-
-    # 4. Inizializza l'ambiente con le coordinate sicure
+    # 4. Inizializza Ambiente
     env = ArmNavigationEnv(
         arm=arm,
         theta1_range=(0, 2*np.pi),
@@ -179,44 +176,73 @@ def main():
 
     results = {}
     
+    # Inizio conteggio tempo totale di training
+    global_start_time = time.time()
+
     # 5. Training Loop
-    # Q-Learning
-    try:
-        results['Q-Learning'], _ = train_agent(
-            QLearning, env, 'Q-Learning', num_episodes=NUM_EPISODES, 
-            alpha=0.1, gamma=0.99, epsilon=0.9
-        )
-    except Exception as e: print(f"Q-Learning Error: {e}")
+    # Esempio con Q-Learning e SAC (Aggiungi DQL o PPO se desideri)
+    agent_list = [
+        (SAC, 'SAC', {'actor_lr': 0.001}),
+        (QLearning, 'Q-Learning', {'alpha': 0.1, 'gamma': 0.99}),
+        (DQL, 'DQL', {'learning_rate': 0.001}),
+        (PPO, 'PPO', {'learning_rate': 0.001})
+    ]
 
-    # SAC
-    try:
-        results['SAC'], _ = train_agent(
-            SAC, env, 'SAC', num_episodes=NUM_EPISODES,
-            actor_lr=0.001, q_lr=0.001, alpha_lr=0.001
-        )
-    except Exception as e: print(f"SAC Error: {e}")
+    for agent_class, name, params in agent_list:
+        try:
+            res, _ = train_agent(agent_class, env, name, num_episodes=NUM_EPISODES, **params)
+            results[name] = res
+        except Exception as e:
+            print(f"{name} Error: {e}")
+
+    # --- INTEGRAZIONE RICHIESTA ---
+    end_time = time.time()
+    training_duration = end_time - global_start_time
+
+    # Creiamo un riassunto per ogni agente salvato nel dizionario results
+    for name, res in results.items():
+        # Calcolo loop sull'ultimo path generato
+        visited = set()
+        has_loop = False
+        for pos in res['path']:
+            p_tuple = tuple(np.round(pos, 2))
+            if p_tuple in visited:
+                has_loop = True
+                break
+            visited.add(p_tuple)
+
+        summary = {
+            "agent_name": name,
+            "episodes": NUM_EPISODES,
+            "final_success_rate": f"{res['final_success_rate']:.2f}%",
+            "average_reward": float(res['average_reward']),
+            "path_length": res['path_length'],
+            "training_time_seconds": round(training_duration, 2), # Tempo totale
+            "goal_reached": res['final_success_rate'] > 0, # Se ha avuto almeno un successo
+            "has_loops_in_final_path": bool(has_loop)
+        }
+
+        # Stampa a video
+        print(f"\n--- RIASSUNTO RISULTATI: {name} ---")
+        print(json.dumps(summary, indent=4))
+
+        # Salvataggio in JSON (un file per ogni agente per chiarezza)
+        filename = f"./results/summary_{name}.json"
+        with open(filename, 'w') as f:
+            json.dump(summary, f, indent=4)
+            
+        print(f"Risultati salvati correttamente in {filename}")
+
+    # Grafici finali
+    plot_comparison(results)
+    print("\n" + "="*60)
+    print("Generating Visualizations...")
+    print("="*60)
     
-    # DQL
-    try:
-        results['DQL'], _ = train_agent(
-            DQL, env, 'DQL', num_episodes=NUM_EPISODES,
-            learning_rate=0.001, gamma=0.95
-        )
-    except Exception as e: print(f"DQL Error: {e}")
-
-    # PPO
-    try:
-        results['PPO'], _ = train_agent(
-            PPO, env, 'PPO', num_episodes=NUM_EPISODES,
-            learning_rate=0.001
-        )
-    except Exception as e: print(f"PPO Error: {e}")
-
-    # 6. Salvataggio Risultati e Grafici
     plot_comparison(results)
     
     for name, res in results.items():
-        print(f"\nGenerating plots for {name}...")
+        print(f"Generating plots for {name}...")
         path = res['path']
         
         # Plot Workspace Statico
@@ -226,7 +252,7 @@ def main():
             filename=f"./results/path_{name}.png"
         )
         
-        # Animazione GIF
+        # Animazione GIF (solo se il path è valido)
         if len(path) > 1:
             animate_training_path(
                 arm, path, env, obstacles, 
@@ -235,8 +261,7 @@ def main():
             )
 
     print("\n" + "="*60)
-    print("Finito! Controlla la cartella /results")
+    print("Finito! Controlla la cartella /results per i JSON, PNG e GIF.")
     print("="*60)
-
 if __name__ == "__main__":
     main()

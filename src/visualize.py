@@ -77,6 +77,7 @@ def plot_cspace_components(cspace, start=None, goal=None, filename="cspace_compo
         theta2_g = cspace.theta2_vals[goal[1]]
         ax.scatter(theta1_g, theta2_g, c='red', s=200, marker='*', edgecolors='k', label='Goal', zorder=10)
 
+    ax.legend()
     ax.set_xlabel(r"$\theta_1$")
     ax.set_ylabel(r"$\theta_2$")
     ax.set_title(f"C-Space Connectivity ({num_components} components)")
