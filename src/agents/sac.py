@@ -48,7 +48,7 @@ class SACNetwork(nn.Module):
 class SAC:
     """Discrete Soft Actor-Critic agent"""
     def __init__(self, env, actor_lr=0.0003, q_lr=0.0003, alpha_lr=0.001,
-                 gamma=0.95, tau=0.005, alpha=0.2, memory_size=10000,
+                 gamma=0.995, tau=0.005, alpha=0.2, memory_size=100000,
                  batch_size=64, device=None):
         self.env = env
         self.gamma = gamma
@@ -79,8 +79,8 @@ class SAC:
         return self.log_alpha.exp()
 
     def remember(self, state, action, reward, next_state, done):
-        scaled_reward = reward / 20.0
-        self.memory.append((state, action, scaled_reward, next_state, done))
+        #scaled_reward = reward / 20.0
+        self.memory.append((state, action, reward, next_state, done))
 
     def choose_action(self, state, training=True):
         """Sample action from policy
@@ -123,8 +123,7 @@ class SAC:
             # Compute target Q-values
             next_probs = self.model.actor(next_states) 
             # Avoid log(0) by adding a small constant
-            z = (next_probs == 0.0).float() * 1e-8
-            log_next_probs = torch.log(next_probs + z)
+            log_next_probs = torch.log(torch.clamp(next_probs, min=1e-8))
             
             next_q1 = self.target_model.q1(next_states)
             next_q2 = self.target_model.q2(next_states)
@@ -148,8 +147,7 @@ class SAC:
 
         # --- Actor Update ---
         probs = self.model.actor(states)
-        z = (probs == 0.0).float() * 1e-8
-        log_probs = torch.log(probs + z)
+        log_probs = torch.log(torch.clamp(probs, min=1e-8))
         
         with torch.no_grad():
             q1 = self.model.q1(states)
@@ -166,7 +164,7 @@ class SAC:
         self.actor_opt.step()
 
         entropy = -(probs * log_probs).sum(dim=1).mean()
-        alpha_loss = -(self.log_alpha * (entropy - self.target_entropy).detach()).mean()
+        alpha_loss = (self.log_alpha * (entropy - self.target_entropy).detach()).mean()
         
         self.alpha_opt.zero_grad()
         alpha_loss.backward()

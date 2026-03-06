@@ -35,43 +35,48 @@ def create_environment():
 
 def find_valid_points(cspace):
     """
-    Trova automaticamente due punti (Start e Goal) che appartengono
-    alla stessa componente connessa (sono raggiungibili).
+    Auto-configure Start and Goal points in the largest free component of the C-Space.
+    This ensures that both points are in a valid, connected region, increasing the chances of successful training for all agents.
+    Args:
+    - cspace: ConfigurationSpace object with built grid and obstacles
+    Returns:
+    - start_idx: (i, j) index for the start state in the discretized C-Space
+    - goal_idx: (i, j) index for the goal state in the discretized C-Space
     """
     print("\n[Auto-Config] Cercando punti validi nel C-Space...")
     
-    # 1. Etichetta le componenti connesse (0 = libero, 1 = ostacolo)
-    # label() vuole 0 come sfondo e numeri interi come oggetti.
-    # Invertiamo: vogliamo etichettare lo SPAZIO LIBERO (che è 0 nella grid).
+    # 1. Label the connected components (0 = free, 1 = obstacle)
+    # label() wants 0 as background and integers as objects.
+    # We invert it: we want to label the FREE SPACE (which is 0 in the grid).
     free_space_mask = (cspace.grid == 0)
     labeled_grid, num_features = label(free_space_mask)
     
     if num_features == 0:
-        raise ValueError("ERRORE: Non c'è spazio libero! Rimuovi qualche ostacolo.")
+        raise ValueError("ERROR: There is no free space! Remove some obstacles.")
 
-    # 2. Trova la componente più grande (quella con più celle libere)
+    # 2. Find the largest component (the one with the most free cells)
     component_sizes = [np.sum(labeled_grid == i) for i in range(1, num_features + 1)]
     largest_component_label = np.argmax(component_sizes) + 1
     
-    print(f"  - Trovate {num_features} isole separate.")
-    print(f"  - Selezionata l'isola più grande (Label #{largest_component_label}) con {max(component_sizes)} celle.")
+    print(f"  - Found {num_features} separate components.")
+    print(f"  - Selected the largest component (Label #{largest_component_label}) with {max(component_sizes)} free cells.")
 
-    # 3. Prendi tutte le coordinate (i, j) che appartengono a questa isola
+    # 3. Get all coordinates (i, j) that belong to this component
     valid_indices = np.argwhere(labeled_grid == largest_component_label)
     
-    # 4. Scegli Start e Goal
-    # Prendiamo due punti a caso, ma cerchiamo di averli distanti
+    # 4. Choose Start and Goal points
+    # Randomly shuffle valid indices to get a random start point, and then find a goal point that is sufficiently far.
     np.random.shuffle(valid_indices)
     
-    start_idx = tuple(valid_indices[0]) # Primo punto a caso
+    start_idx = tuple(valid_indices[0]) 
     
-    # Cerchiamo un goal che sia distante almeno un po' (es. 50 step di grid)
-    goal_idx = tuple(valid_indices[-1]) # Ultimo punto (spesso lontano dopo lo shuffle, ma non garantito)
+    # Initial guess for goal: the last point in the shuffled list (often far, but not guaranteed)
+    goal_idx = tuple(valid_indices[-1]) 
     
-    # Raffinamento: scorri finché non trovi un punto lontano
+    # Refine goal_idx to ensure it's sufficiently far from start_idx (e.g., at least 50% of the grid size away)
     for candidate in valid_indices:
         dist = np.abs(candidate[0] - start_idx[0]) + np.abs(candidate[1] - start_idx[1])
-        if dist > cspace.N1 // 2: # Almeno metà griglia di distanza
+        if dist > cspace.N1 // 2: 
             goal_idx = tuple(candidate)
             break
             
@@ -90,7 +95,7 @@ def train_agent(agent_class, env, agent_name, num_episodes=2000, **kwargs):
     
     path = agent.get_path()
     
-    # Calcolo statistiche sicure (evita errori su liste vuote)
+    # Compute final success rate and average reward
     final_succ = 0.0
     if len(agent.episode_success) > 0:
         final_succ = 100.0 * np.sum(agent.episode_success) / num_episodes
@@ -111,7 +116,12 @@ def train_agent(agent_class, env, agent_name, num_episodes=2000, **kwargs):
     return results, agent
 
 def plot_comparison(results_dict, output_dir='./results'):
-    """Plot comparativo semplice"""
+    """Comparison plot for rewards
+    Args:
+        results_dict: dictionary with agent names as keys and their results as values (must include 'episode_rewards')
+        output_dir: directory to save the plot
+    Returns: None (saves the plot to disk)
+    """
     plt.figure(figsize=(10, 5))
     for name, res in results_dict.items():
         # Smoothing reward
@@ -135,18 +145,17 @@ def main():
     print("Multi-Agent RL Comparison (Smart Start/Goal)")
     print("="*60)
     
-    # Configurazione
+    # Configuration
     N_DISCRETIZATION = 100 
-    NUM_EPISODES = 50000  # Modificato come da tua richiesta precedente
-    
-    # Setup Cartelle
+    NUM_EPISODES = 50000  
+
     import os
     os.makedirs("./results", exist_ok=True)
 
-    # 1. Crea Mondo
+    # 1. Create Arm and Obstacles
     arm, obstacles = create_environment()
     
-    # 2. Costruisci C-Space
+    # 2. Build C-Space 
     print("Building C-Space...")
     cspace = ConfigurationSpace(
         arm, (0, 2*np.pi), (0, 2*np.pi), 
@@ -154,7 +163,7 @@ def main():
     )
     cspace.build()
     
-    # 3. TROVA START/GOAL
+    # 3. Find valid Start and Goal points in the largest free component of the C-Space
     start_state, goal_state = find_valid_points(cspace)
     plot_cspace_components(
         cspace, 
@@ -162,7 +171,7 @@ def main():
         goal=goal_state, 
         filename="./results/cspace_connectivity.png"
     )
-    # 4. Inizializza Ambiente
+    # 4. Initialize Environment with the found Start and Goal
     env = ArmNavigationEnv(
         arm=arm,
         theta1_range=(0, 2*np.pi),
@@ -176,11 +185,10 @@ def main():
 
     results = {}
     
-    # Inizio conteggio tempo totale di training
+
     global_start_time = time.time()
 
     # 5. Training Loop
-    # Esempio con Q-Learning e SAC (Aggiungi DQL o PPO se desideri)
     agent_list = [
         (SAC, 'SAC', {'actor_lr': 0.001}),
         (QLearning, 'Q-Learning', {'alpha': 0.1, 'gamma': 0.99}),
@@ -195,13 +203,11 @@ def main():
         except Exception as e:
             print(f"{name} Error: {e}")
 
-    # --- INTEGRAZIONE RICHIESTA ---
     end_time = time.time()
     training_duration = end_time - global_start_time
 
-    # Creiamo un riassunto per ogni agente salvato nel dizionario results
+    # Create summary of results and save to JSON
     for name, res in results.items():
-        # Calcolo loop sull'ultimo path generato
         visited = set()
         has_loop = False
         for pos in res['path']:
@@ -214,26 +220,25 @@ def main():
         summary = {
             "agent_name": name,
             "episodes": NUM_EPISODES,
-            "final_success_rate": f"{res['final_success_rate']:.2f}%",
+            "final_success_rate": float(res['final_success_rate']),
             "average_reward": float(res['average_reward']),
             "path_length": res['path_length'],
-            "training_time_seconds": round(training_duration, 2), # Tempo totale
-            "goal_reached": res['final_success_rate'] > 0, # Se ha avuto almeno un successo
+            "training_time_seconds": round(training_duration, 2), 
+            "goal_reached": bool(res['final_success_rate'] > 0), 
             "has_loops_in_final_path": bool(has_loop)
         }
 
-        # Stampa a video
-        print(f"\n--- RIASSUNTO RISULTATI: {name} ---")
+        
+        print(f"\n--- SUMMARY: {name} ---")
         print(json.dumps(summary, indent=4))
 
-        # Salvataggio in JSON (un file per ogni agente per chiarezza)
         filename = f"./results/summary_{name}.json"
         with open(filename, 'w') as f:
             json.dump(summary, f, indent=4)
             
-        print(f"Risultati salvati correttamente in {filename}")
+        print(f"Summary saved correctly in {filename}")
 
-    # Grafici finali
+    # Final comparison plot for rewards
     plot_comparison(results)
     print("\n" + "="*60)
     print("Generating Visualizations...")
@@ -245,14 +250,14 @@ def main():
         print(f"Generating plots for {name}...")
         path = res['path']
         
-        # Plot Workspace Statico
+        # Static workspace plot
         plot_workspace_path(
             arm, path, env, 
             start=start_state, goal=goal_state, 
             filename=f"./results/path_{name}.png"
         )
         
-        # Animazione GIF (solo se il path è valido)
+        # Animation of the training path (only if it has a valid path)
         if len(path) > 1:
             animate_training_path(
                 arm, path, env, obstacles, 
@@ -261,7 +266,7 @@ def main():
             )
 
     print("\n" + "="*60)
-    print("Finito! Controlla la cartella /results per i JSON, PNG e GIF.")
+    print("Finished! All results and visualizations saved in the './results' directory.")
     print("="*60)
 if __name__ == "__main__":
     main()
