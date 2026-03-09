@@ -139,7 +139,10 @@ class PPO:
         old_log_probs = old_log_probs.detach()
         
         # Advantages normalization
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        if advantages.numel() > 1:
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        else:
+            advantages = advantages - advantages.mean() # If there's only one advantage no std to divide by
         
         for _ in range(self.epochs):
             action_probs, values = self.policy(states_t)

@@ -1,0 +1,10 @@
+{
+    "agent_name": "SAC",
+    "episodes": 15000,
+    "final_success_rate": 0.0,
+    "average_reward": -242.26839999999984,
+    "path_length": 501,
+    "training_time_seconds": 47642.93,
+    "goal_reached": false,
+    "has_loops_in_final_path": true
+}

@@ -1,0 +1,10 @@
+{
+    "agent_name": "PPO",
+    "episodes": 15000,
+    "final_success_rate": 0.3933333333333333,
+    "average_reward": -226.4830999999997,
+    "path_length": 22,
+    "training_time_seconds": 47642.93,
+    "goal_reached": false,
+    "has_loops_in_final_path": false
+}

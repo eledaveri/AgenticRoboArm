@@ -1,0 +1,10 @@
+{
+    "agent_name": "DQL",
+    "episodes": 15000,
+    "final_success_rate": 0.0,
+    "average_reward": -190.96639999999962,
+    "path_length": 5,
+    "training_time_seconds": 47642.93,
+    "goal_reached": false,
+    "has_loops_in_final_path": false
+}

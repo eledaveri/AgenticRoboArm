@@ -37,17 +37,10 @@ def find_valid_points(cspace):
     """
     Auto-configure Start and Goal points in the largest free component of the C-Space.
     This ensures that both points are in a valid, connected region, increasing the chances of successful training for all agents.
-    Args:
-    - cspace: ConfigurationSpace object with built grid and obstacles
-    Returns:
-    - start_idx: (i, j) index for the start state in the discretized C-Space
-    - goal_idx: (i, j) index for the goal state in the discretized C-Space
     """
     print("\n[Auto-Config] Cercando punti validi nel C-Space...")
     
     # 1. Label the connected components (0 = free, 1 = obstacle)
-    # label() wants 0 as background and integers as objects.
-    # We invert it: we want to label the FREE SPACE (which is 0 in the grid).
     free_space_mask = (cspace.grid == 0)
     labeled_grid, num_features = label(free_space_mask)
     
@@ -65,15 +58,12 @@ def find_valid_points(cspace):
     valid_indices = np.argwhere(labeled_grid == largest_component_label)
     
     # 4. Choose Start and Goal points
-    # Randomly shuffle valid indices to get a random start point, and then find a goal point that is sufficiently far.
     np.random.shuffle(valid_indices)
     
     start_idx = tuple(valid_indices[0]) 
-    
-    # Initial guess for goal: the last point in the shuffled list (often far, but not guaranteed)
     goal_idx = tuple(valid_indices[-1]) 
     
-    # Refine goal_idx to ensure it's sufficiently far from start_idx (e.g., at least 50% of the grid size away)
+    # Refine goal_idx to ensure it's sufficiently far from start_idx
     for candidate in valid_indices:
         dist = np.abs(candidate[0] - start_idx[0]) + np.abs(candidate[1] - start_idx[1])
         if dist > cspace.N1 // 2: 
@@ -86,7 +76,7 @@ def find_valid_points(cspace):
     return start_idx, goal_idx
 
 def train_agent(agent_class, env, agent_name, num_episodes=2000, **kwargs):
-    print(f"\n{'='*60}\nTraining {agent_name}\n{'='*60}")
+    print(f"\n{'='*60}\nTraining {agent_name} for {num_episodes} episodes\n{'='*60}")
     agent = agent_class(env, **kwargs)
     
     start_time = time.time()
@@ -111,20 +101,15 @@ def train_agent(agent_class, env, agent_name, num_episodes=2000, **kwargs):
         'training_time': training_time,
         'path': path,
         'episode_rewards': agent.episode_rewards,
-        'episode_success': agent.episode_success
+        'episode_success': agent.episode_success,
+        'trained_episodes': num_episodes #
     }
     return results, agent
 
 def plot_comparison(results_dict, output_dir='./results'):
-    """Comparison plot for rewards
-    Args:
-        results_dict: dictionary with agent names as keys and their results as values (must include 'episode_rewards')
-        output_dir: directory to save the plot
-    Returns: None (saves the plot to disk)
-    """
+    """Comparison plot for rewards"""
     plt.figure(figsize=(10, 5))
     for name, res in results_dict.items():
-        # Smoothing reward
         rewards = res['episode_rewards']
         if len(rewards) > 50:
             smoothed = np.convolve(rewards, np.ones(50)/50, mode='valid')
@@ -147,7 +132,14 @@ def main():
     
     # Configuration
     N_DISCRETIZATION = 100 
-    NUM_EPISODES = 50000  
+    
+    # Dictionary to specify different episode counts for each agent based on their learning characteristics:
+    EPISODES = {
+        'Q-Learning': 30000,  # 5000
+        'SAC': 30000,          # 15000
+        'DQL': 30000,          # 15000
+        'PPO': 30000           # 15000
+    }
 
     import os
     os.makedirs("./results", exist_ok=True)
@@ -163,7 +155,7 @@ def main():
     )
     cspace.build()
     
-    # 3. Find valid Start and Goal points in the largest free component of the C-Space
+    # 3. Find valid Start and Goal points
     start_state, goal_state = find_valid_points(cspace)
     plot_cspace_components(
         cspace, 
@@ -171,7 +163,8 @@ def main():
         goal=goal_state, 
         filename="./results/cspace_connectivity.png"
     )
-    # 4. Initialize Environment with the found Start and Goal
+    
+    # 4. Initialize Environment
     env = ArmNavigationEnv(
         arm=arm,
         theta1_range=(0, 2*np.pi),
@@ -185,7 +178,6 @@ def main():
 
     results = {}
     
-
     global_start_time = time.time()
 
     # 5. Training Loop
@@ -198,7 +190,8 @@ def main():
 
     for agent_class, name, params in agent_list:
         try:
-            res, _ = train_agent(agent_class, env, name, num_episodes=NUM_EPISODES, **params)
+            n_episodes = EPISODES.get(name, 5000) # If not specified default to 5000
+            res, _ = train_agent(agent_class, env, name, num_episodes=n_episodes, **params)
             results[name] = res
         except Exception as e:
             print(f"{name} Error: {e}")
@@ -217,18 +210,19 @@ def main():
                 break
             visited.add(p_tuple)
 
+        last_state = tuple(np.round(res['path'][-1]).astype(int))
+        
         summary = {
             "agent_name": name,
-            "episodes": NUM_EPISODES,
+            "episodes": res.get('trained_episodes', EPISODES.get(name, 0)), 
             "final_success_rate": float(res['final_success_rate']),
             "average_reward": float(res['average_reward']),
             "path_length": res['path_length'],
             "training_time_seconds": round(training_duration, 2), 
-            "goal_reached": bool(res['final_success_rate'] > 0), 
+            "goal_reached": bool(last_state == goal_state), 
             "has_loops_in_final_path": bool(has_loop)
         }
 
-        
         print(f"\n--- SUMMARY: {name} ---")
         print(json.dumps(summary, indent=4))
 
@@ -238,12 +232,11 @@ def main():
             
         print(f"Summary saved correctly in {filename}")
 
-    # Final comparison plot for rewards
-    plot_comparison(results)
     print("\n" + "="*60)
     print("Generating Visualizations...")
     print("="*60)
     
+    # Final comparison plot for rewards
     plot_comparison(results)
     
     for name, res in results.items():
@@ -257,16 +250,17 @@ def main():
             filename=f"./results/path_{name}.png"
         )
         
-        # Animation of the training path (only if it has a valid path)
+        # Animation of the training path
         if len(path) > 1:
             animate_training_path(
                 arm, path, env, obstacles, 
                 start=start_state, goal=goal_state, 
-                filename=f"./results/anim_{name}.gif"
+                filename=f"./results/anim_{name}_{EPISODES.get(name)}.gif"
             )
 
     print("\n" + "="*60)
     print("Finished! All results and visualizations saved in the './results' directory.")
     print("="*60)
+
 if __name__ == "__main__":
     main()
