@@ -8,7 +8,7 @@ A Python implementation of motion planning for a 2-DOF planar robotic arm in con
 - [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Results](#results)
+- [Results & Analysis: Tabular vs Deep RL](#results--analysis-tabular-vs-deep-rl)
 - [Configuration](#configuration)
 - [Common Issues](#common-issues)
 - [License](#license)
@@ -102,16 +102,39 @@ python scripts/main_single_agent.py
 
 ```
 
-## Results
+## Results & Analysis: Tabular vs. Deep RL
 
-After training, the `/results` directory will be populated with visualizations:
+The benchmark revealed a fascinating and highly educational limitation of Deep Reinforcement Learning when applied to discrete, sparse-reward navigation tasks.
 
-* **`cspace_connectivity.png`**: Highlights the free space islands and the chosen Start/Goal points.
-* **`comparison_reward.png`**: A smoothed learning curve comparing the episodic rewards of all tested agents.
-* **`anim_[AGENT].gif`**: Animated representations of the trained policies navigating the physical workspace.
-* **`path_[AGENT].png`**: Static workspace overlays of the final trajectory.
+After extensive training (up to 50,000 episodes per agent), Tabular Q-Learning completely dominated the environment (achieving >93% success rate), while the Deep RL agents (SAC, DQL, PPO) severely struggled to find the goal, often converging to a 0% success rate even with heavily tuned hyperparameters.
 
+**Why did Deep RL fail while Tabular Q-Learning succeeded?**
+
+1. **Replay Buffer Dilution (The "Needle in a Haystack" Problem)**: In a 100x100 grid, finding the goal by random exploration takes thousands of episodes. When a Deep RL agent finally discovers the rare +100 reward, that single positive experience is saved in a massive Replay Buffer (e.g., 100,000 transitions) alongside millions of negative step penalties. During batch sampling, the network rarely sees the winning transition, causing the positive signal to be "drowned out." Q-Learning, conversely, updates its exact state-action table immediately and permanently without forgetting.
+2. **Periodic Boundary Topology**: The configuration space is toroidal (angles wrap from 2π back to 0). For tabular Q-Learning, state 99 and state 0 are just two abstract keys in a dictionary; it easily understands they are adjacent. For a Neural Network, transitioning from normalized input 0.99 to 0.00 is seen as a massive, discontinuous numerical jump. Without specialized trigonometric encodings (like feeding sin(θ), cos(θ) instead of scalar indices), the network struggles to map the continuous loop of the borders.
+3. **The "Suicide" Policy (Reward Hacking)**: Since the environment issues a small negative reward for every step taken (to encourage the shortest paths), the Neural Networks quickly learn that exploring the vast empty space yields endless penalties. To minimize expected loss, the policy converges on a local optimum: purposely crashing into the nearest obstacle to terminate the episode as fast as possible.
+
+### Visual Outputs
+- **C-Space Connectivity**: Maps the safe topological islands.
+  ![cspace](scripts/results/cspace_connectivity.png)
+- **Reward Comparison**: Notice the fast convergence of Q-Learning against the flatlined Deep RL networks.
+  ![reward_comparison](scripts/results/comparison_reward.png)
+- **Agent Evaluation Paths**: Animated visualization of the complete robot arm     executing the learned path, with:
+   - The two-link arm shown in black
+   - Obstacles shown in red with transparency
+   - A trailing path showing the end-effector trajectory
+   - Start position marked with a green star
+   - Goal position marked with a blue star
+DQL: ![robot_motion](scripts/results/anim_DQL_50000.gif)
+Tabular Q-Leraning: ![robot_motion](scripts/results/anim_Q-Learning_50000.gif)
+PPO: ![robot_motion](scripts/results/anim_PPO_50000.gif)
+SAC: ![robot_motion](scripts/results/anim_SAC_50000.gif)
+
+   
 ## Configuration
+The training lengths can be managed directly in the main_comparison.py via the EPISODES dictionary. For example:
+- **Q-Learning**: 50000 episodes (needs full table exploration).
+- **SAC / DQL / PPO**: 15000 to 30000 episodes depending on computational resources.
 
 To effectively handle the sparse reward structure of the 100×100 grid, the Deep RL agents (DQL, SAC) require specific hyperparameters:
 
