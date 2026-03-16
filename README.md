@@ -173,16 +173,6 @@ python scripts/main_single_agent.py
 
 ## Results & Analysis: Tabular vs. Deep RL
 
-The benchmark revealed a fascinating and highly educational limitation of Deep Reinforcement Learning when applied to discrete, sparse-reward navigation tasks.
-
-After extensive training (up to 50,000 episodes per agent), Tabular Q-Learning completely dominated the environment (achieving >93% success rate), while the Deep RL agents (SAC, DQL, PPO) severely struggled to find the goal, often converging to a 0% success rate even with heavily tuned hyperparameters.
-
-**Why did Deep RL fail while Tabular Q-Learning succeeded?**
-
-1. **Replay Buffer Dilution (The "Needle in a Haystack" Problem)**: In a 100x100 grid, finding the goal by random exploration takes thousands of episodes. When a Deep RL agent finally discovers the rare +100 reward, that single positive experience is saved in a massive Replay Buffer (e.g., 100,000 transitions) alongside millions of negative step penalties. During batch sampling, the network rarely sees the winning transition, causing the positive signal to be "drowned out." Q-Learning, conversely, updates its exact state-action table immediately and permanently without forgetting.
-2. **Periodic Boundary Topology**: The configuration space is toroidal (angles wrap from 2π back to 0). For tabular Q-Learning, state 99 and state 0 are just two abstract keys in a dictionary; it easily understands they are adjacent. For a Neural Network, transitioning from normalized input 0.99 to 0.00 is seen as a massive, discontinuous numerical jump. Without specialized trigonometric encodings (like feeding sin(θ), cos(θ) instead of scalar indices), the network struggles to map the continuous loop of the borders.
-3. **The "Suicide" Policy (Reward Hacking)**: Since the environment issues a small negative reward for every step taken (to encourage the shortest paths), the Neural Networks quickly learn that exploring the vast empty space yields endless penalties. To minimize expected loss, the policy converges on a local optimum: purposely crashing into the nearest obstacle to terminate the episode as fast as possible.
-
 ### Training Oputput
 The comparison script provides detailed execution feedback and generates a JSON summary for each agent upon completion:
 ```json 
@@ -210,15 +200,35 @@ The comparison script provides detailed execution feedback and generates a JSON 
    + A trailing path showing the end-effector trajectory
    + Start position marked with a green star
    + Goal position marked with a blue star
-        * DQL: ![robot_motion](results/anim_DQL_50000.gif)
-        * Tabular Q-Leraning: ![robot_motion](anim_Q-Learning_50000.gif)
-        * PPO: ![robot_motion](results/anim_PPO_50000.gif)
-        * SAC: ![robot_motion](results/anim_SAC_50000.gif)
+  
+| Tabular Q-Learning | Deep Q-Learning (DQL) |
+| :---: | :---: |
+| ![Q-Learning](results/anim_Q-Learning_50000.gif) | ![DQL](results/anim_DQL_50000.gif) |
+
+| PPO | SAC |
+| :---: | :---: |
+| ![PPO](results/anim_PPO_50000.gif) | ![SAC](results/anim_SAC_50000.gif) |
+
 - **`path_[AGENT].png`**: Displays the learned trajectory in workspace coordinates, showing the end-effector path from start to goal.
-    * DQL: ![robot_path](results/path_DQL.png)
-    * PPO: ![robot_path](results/path_PPO.png)
-    * Tabular Q-Learning: ![robot_path](results/path_Q-Learning.png)
-    * SAC: ![robot_path](results/path_SAC.png)
+
+ | Tabular Q-Learning | Deep Q-Learning (DQL) |
+| :---: | :---: |
+| ![Q-Learning Path](results/path_Q-Learning.png) | ![DQL Path](results/path_DQL.png) |
+
+| PPO | SAC |
+| :---: | :---: |
+| ![PPO Path](results/path_PPO.png) | ![SAC Path](results/path_SAC.png) |
+
+### Analysis
+The benchmark revealed a fascinating and highly educational limitation of Deep Reinforcement Learning when applied to discrete, sparse-reward navigation tasks.
+
+After extensive training (up to 50,000 episodes per agent), Tabular Q-Learning completely dominated the environment (achieving >93% success rate), while the Deep RL agents (SAC, DQL, PPO) severely struggled to find the goal, often converging to a 0% success rate even with heavily tuned hyperparameters.
+
+**Why did Deep RL fail while Tabular Q-Learning succeeded?**
+
+1. **Replay Buffer Dilution (The "Needle in a Haystack" Problem)**: In a 100x100 grid, finding the goal by random exploration takes thousands of episodes. When a Deep RL agent finally discovers the rare +100 reward, that single positive experience is saved in a massive Replay Buffer (e.g., 100,000 transitions) alongside millions of negative step penalties. During batch sampling, the network rarely sees the winning transition, causing the positive signal to be "drowned out." Q-Learning, conversely, updates its exact state-action table immediately and permanently without forgetting.
+2. **Periodic Boundary Topology**: The configuration space is toroidal (angles wrap from 2π back to 0). For tabular Q-Learning, state 99 and state 0 are just two abstract keys in a dictionary; it easily understands they are adjacent. For a Neural Network, transitioning from normalized input 0.99 to 0.00 is seen as a massive, discontinuous numerical jump. Without specialized trigonometric encodings (like feeding sin(θ), cos(θ) instead of scalar indices), the network struggles to map the continuous loop of the borders.
+3. **The "Suicide" Policy (Reward Hacking)**: Since the environment issues a small negative reward for every step taken (to encourage the shortest paths), the Neural Networks quickly learn that exploring the vast empty space yields endless penalties. To minimize expected loss, the policy converges on a local optimum: purposely crashing into the nearest obstacle to terminate the episode as fast as possible.
 
 ## Configuration
 
