@@ -38,7 +38,7 @@ def find_valid_points(cspace):
     Auto-configure Start and Goal points in the largest free component of the C-Space.
     This ensures that both points are in a valid, connected region, increasing the chances of successful training for all agents.
     """
-    print("\n[Auto-Config] Cercando punti validi nel C-Space...")
+    print("\n[Auto-Config] Looking for valid Start and Goal points in the largest free component of the C-Space...")
     
     # 1. Label the connected components (0 = free, 1 = obstacle)
     free_space_mask = (cspace.grid == 0)

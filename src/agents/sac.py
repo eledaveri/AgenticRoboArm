@@ -65,7 +65,7 @@ class SAC:
         self.actor_opt = optim.Adam(self.model.actor.parameters(), lr=actor_lr)
         self.q_opt = optim.Adam(list(self.model.q1.parameters()) + list(self.model.q2.parameters()), lr=q_lr)
         
-        # Entropy automatica
+        # Automatic entropy tuning
         self.target_entropy = -np.log(1.0 / env.action_space.n) * 0.98
         self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
         self.alpha_opt = optim.Adam([self.log_alpha], lr=alpha_lr)
@@ -187,7 +187,7 @@ class SAC:
             episode_reward = 0
             terminated = False
             truncated = False
-            steps = 0  # Steo counter to prevent infinite loops
+            steps = 0  # Step counter to prevent infinite loops
             
             # Stop training if it takes too long (e.g., due to loops)
             while not (terminated or truncated) and steps < max_steps:
