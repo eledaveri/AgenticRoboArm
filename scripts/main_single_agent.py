@@ -1,8 +1,3 @@
-"""
-Adattamento del main.py originale per il nuovo sistema Gymnasium.
-Mantiene la stessa logica ma usa il nuovo ambiente e agenti.
-"""
-
 from src.arm import PlanarArm2DOF
 from src.obstacle import make_rect, make_circle, make_polygon
 from src.arm_env import ArmNavigationEnv
@@ -40,7 +35,7 @@ def main():
         obstacles=obstacles,
         start=start,
         goal=goal,
-        continuous=False  # Use discrete actions like original
+        continuous=False  # Use discrete actions
     )
     
     # Get theta values for visualization

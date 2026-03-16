@@ -200,22 +200,26 @@ The comparison script provides detailed execution feedback and generates a JSON 
 ```
 
 ### Visual Outputs
-- **C-Space Connectivity**: Maps the safe topological islands.
-  ![cspace](scripts/results/cspace_connectivity.png)
-- **Reward Comparison**: Notice the fast convergence of Q-Learning against the flatlined Deep RL networks.
-  ![reward_comparison](scripts/results/comparison_reward.png)
-- **Agent Evaluation Paths**: Animated visualization of the complete robot arm     executing the learned path, with:
+- **`cspace_connectivity.png`**: Shows connected components of free space, where each component is colored differently to ensure the Start and Goal are topologically reachable.
+  ![cspace](results/cspace_connectivity.png)
+- **`comparison_reward.png`**: Graph overlaying the smoothed episodic rewards of all algorithms, highlighting convergence speeds.
+  ![reward_comparison](results/comparison_reward.png)
+- **`anim_[AGENT].gif`**: Animated visualization of the complete robot arm executing the learned path. with:
    - The two-link arm shown in black
    - Obstacles shown in red with transparency
    - A trailing path showing the end-effector trajectory
    - Start position marked with a green star
    - Goal position marked with a blue star
-DQL: ![robot_motion](scripts/results/anim_DQL_50000.gif)
-Tabular Q-Leraning: ![robot_motion](scripts/results/anim_Q-Learning_50000.gif)
-PPO: ![robot_motion](scripts/results/anim_PPO_50000.gif)
-SAC: ![robot_motion](scripts/results/anim_SAC_50000.gif)
+DQL: ![robot_motion](results/anim_DQL_50000.gif)
+Tabular Q-Leraning: ![robot_motion](anim_Q-Learning_50000.gif)
+PPO: ![robot_motion](results/anim_PPO_50000.gif)
+SAC: ![robot_motion](results/anim_SAC_50000.gif)
+- **`path_[AGENT].png`**: Displays the learned trajectory in workspace coordinates, showing the end-effector path from start to goal.
+DQL: ![robot_path](results/path_DQL.png)
+PPO: ![robot_path](results/path_PPO.png)
+Tabular Q-Learning: ![robot_path](results/path_Q-Learning.png)
+SAC: ![robot_path](results/path_SAC.png)
 
-   
 ## Configuration
 
 ### Training lenghts
