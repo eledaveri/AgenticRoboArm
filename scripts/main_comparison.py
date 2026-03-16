@@ -135,10 +135,10 @@ def main():
     
     # Dictionary to specify different episode counts for each agent based on their learning characteristics:
     EPISODES = {
-        'Q-Learning': 30000,  # 5000
-        'SAC': 30000,          # 15000
-        'DQL': 30000,          # 15000
-        'PPO': 30000           # 15000
+        'Q-Learning': 50000,  # 50000
+        'SAC': 50000,          # 15000
+        'DQL': 50000,          # 15000
+        'PPO': 50000           # 15000
     }
 
     import os

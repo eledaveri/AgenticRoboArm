@@ -1,10 +1,10 @@
 {
     "agent_name": "Q-Learning",
     "episodes": 50000,
-    "final_success_rate": 93.578,
-    "average_reward": 69.54809999999999,
-    "path_length": 49,
-    "training_time_seconds": 47642.93,
+    "final_success_rate": 99.096,
+    "average_reward": 88.70550000000004,
+    "path_length": 20,
+    "training_time_seconds": 195015.89,
     "goal_reached": true,
     "has_loops_in_final_path": false
 }
